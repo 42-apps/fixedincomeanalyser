@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fixed Income Analyser</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- ===== Header ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon48.png" alt="" class="brand-logo" />
+      <div class="brand-text">
+        <h1>Fixed Income Analyser</h1>
+        <p class="brand-sub">Ranked survey of yield-generating instruments for HNW investors —
+          <span class="ccy-line">USD · EUR · GBP · CHF · JPY · AUD · CAD · SGD · AED · INR · ZAR · BRL · MXN</span> ·
+          <span class="asof" id="asOfLabel">data as of June 2026</span></p>
+      </div>
+    </div>
+    <div class="brand-right">
+      <button class="ghost-btn" id="changelogBtn" title="Data version history &amp; month-over-month changes">📈 Changelog</button>
+      <button class="ghost-btn" id="methodBtn" title="How the scores work">⚙ Methodology &amp; weights</button>
+      <button class="ghost-btn" id="aboutBtn" title="Sources &amp; disclaimer">ⓘ About</button>
+    </div>
+  </header>
+
+  <!-- ===== Disclaimer ===== -->
+  <div class="disclaimer" id="disclaimer">
+    <span id="disclaimerText"></span>
+    <button class="x" id="dismissDisc" aria-label="dismiss">×</button>
+  </div>
+
+  <!-- ===== Controls ===== -->
+  <section class="controls">
+    <div class="view-toggle" id="viewToggle">
+      <button data-view="inst" class="active">📋 Instruments</button>
+      <button data-view="ccy">🏆 Best currency</button>
+    </div>
+
+    <div class="ccy-tabs" id="ccyTabs"></div>
+
+    <div class="control-grid">
+      <label class="ctrl" id="ctrlAmount">
+        <span class="ctrl-label">Amount to invest</span>
+        <span class="amount-wrap">
+          <span class="amount-sym" id="amountSym">$</span>
+          <input type="text" inputmode="numeric" id="amount" value="1,000,000" />
+        </span>
+      </label>
+
+      <label class="ctrl" id="ctrlRank">
+        <span class="ctrl-label">Rank by</span>
+        <select id="rankBy">
+          <option value="best">Best overall (risk-adjusted) ↓</option>
+          <option value="yield">Highest yield ↓</option>
+          <option value="net">Highest true (net of inflation) ↓</option>
+          <option value="monthly">Highest monthly income ↓</option>
+          <option value="safest">Safest first ↑</option>
+        </select>
+      </label>
+
+      <label class="ctrl" id="ctrlErosion">
+        <span class="ctrl-label">"True return" subtracts</span>
+        <select id="erosion">
+          <option value="cpi">Local inflation (CPI)</option>
+          <option value="fx">Currency move vs USD</option>
+        </select>
+      </label>
+
+      <label class="ctrl search" id="ctrlSearch">
+        <span class="ctrl-label">Search</span>
+        <input type="text" id="search" placeholder="name, ticker, issuer…" />
+      </label>
+    </div>
+
+    <div class="filter-row">
+      <div class="chip-group" id="catChips"></div>
+      <div class="chip-group risk-chips" id="riskChips"></div>
+    </div>
+  </section>
+
+  <!-- ===== Methodology panel ===== -->
+  <section class="panel" id="methodPanel" hidden>
+    <div class="panel-inner">
+      <h3>How "Best overall" is scored</h3>
+      <p class="muted">
+        Each instrument gets a <strong>Quality Score (0–100)</strong> blending four things. Yield is normalised
+        <em>within each currency</em> — so a 9% rand bond and a 4% dollar bond are each judged against their own
+        market, not each other. Drag the weights to match your priorities — e.g. push <em>Reputation</em> &amp;
+        <em>Safety</em> up and a flashy-but-shaky 11.5% (STRC) falls below a rock-solid 6.25% (Alphabet). Weights
+        re-normalise to 100%.
+      </p>
+      <div class="sliders" id="sliders"></div>
+      <div class="panel-actions">
+        <button class="ghost-btn" id="resetWeights">Reset to defaults</button>
+        <span class="muted" id="weightSum"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== About / sources ===== -->
+  <section class="panel" id="aboutPanel" hidden>
+    <div class="panel-inner" id="aboutInner"></div>
+  </section>
+
+  <!-- ===== Changelog ===== -->
+  <section class="panel" id="changelogPanel" hidden>
+    <div class="panel-inner" id="changelogInner"></div>
+  </section>
+
+  <!-- ===== Macro strip ===== -->
+  <section class="macro" id="macro"></section>
+
+  <!-- ===== Highlights ===== -->
+  <section class="highlights" id="highlights"></section>
+
+  <!-- ===== Table ===== -->
+  <main class="table-wrap">
+    <table class="fia-table" id="table">
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <p class="empty" id="empty" hidden>No instruments match your filters.</p>
+  </main>
+
+  <footer class="footer">
+    <span id="rowCount"></span>
+    <span class="muted">Indicative June 2026 snapshot · not investment advice · verify before investing.</span>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
