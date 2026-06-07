@@ -77,7 +77,7 @@ button { font-family: inherit; cursor: pointer; }
 .ccy-tab:hover { color: var(--txt); border-color: var(--emerald); }
 .ccy-tab.active { background: linear-gradient(180deg, var(--panel2), var(--panel)); color: #fff; border-color: var(--emerald); box-shadow: 0 0 0 1px var(--emerald) inset; }
 
-.control-grid { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 12px; }
+.control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
 .ctrl { display: flex; flex-direction: column; gap: 5px; }
 .ctrl-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
 .ctrl input, .ctrl select {
@@ -203,6 +203,8 @@ body.view-ccy .filter-row,
 body.view-ccy #ctrlRank,
 body.view-ccy #ctrlErosion,
 body.view-ccy #ctrlSearch { display: none; }
+/* benchmark selector only matters when FX is involved */
+body.erosion-cpi:not(.view-ccy) #ctrlBenchmark { display: none; }
 
 /* ===== month-over-month delta chips ===== */
 .delta { font-size: 10.5px; font-weight: 700; padding: 0 4px; border-radius: 4px; margin-left: 5px; vertical-align: 1px; }
