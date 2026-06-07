@@ -61,11 +61,17 @@
       </label>
 
       <label class="ctrl" id="ctrlErosion">
-        <span class="ctrl-label">"True return" subtracts</span>
+        <span class="ctrl-label">"True return" basis</span>
         <select id="erosion">
-          <option value="cpi">Local inflation (CPI)</option>
-          <option value="fx">Currency move vs USD</option>
+          <option value="real">Inflation + currency (real, vs benchmark)</option>
+          <option value="cpi">Local inflation (CPI) only</option>
+          <option value="fx">Currency only (vs benchmark)</option>
         </select>
+      </label>
+
+      <label class="ctrl" id="ctrlBenchmark">
+        <span class="ctrl-label">Benchmark currency</span>
+        <select id="benchmark"></select>
       </label>
 
       <label class="ctrl search" id="ctrlSearch">
