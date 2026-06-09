@@ -14,7 +14,7 @@
   const CAT_ORDER = [
     "Cash & Money Market", "Government", "Sukuk (Islamic)", "Inflation-Linked", "Bank Deposit",
     "Municipal & Tax-Free", "Securitized & Covered", "Supranational",
-    "Corporate IG", "Corporate HY", "BDC & Private Credit",
+    "Corporate IG", "Corporate HY", "EM Hard-Currency Bond", "BDC & Private Credit",
     "Preferred & Hybrid", "Property & REIT", "Fund / ETF",
   ];
 
@@ -28,6 +28,38 @@
     ZAR: { rating: "BB-", score: 2.0 }, BRL: { rating: "Ba1 / BB", score: 2.0 },
     MXN: { rating: "BBB-", score: 3.0 },
   };
+
+  // ---- benchmark assets: currencies + "inflation-free" hard money ----
+  const GOLD = { fx: -10, cpi: 0.25 };            // gold ≈ +10%/yr vs USD (20y CAGR); ~0.25% storage drag, no coupon
+  const BASKET_W = { USD: 0.40, CHF: 0.30, GOLD: 0.30 };
+  const BENCH_LABEL = { GOLD: "Gold", BASKET: "Hard-money basket" };
+  function benchMacro(id) {
+    if (id === "GOLD") return GOLD;
+    if (id === "BASKET") return {
+      fx: BASKET_W.USD * CCY.USD.macro.fx + BASKET_W.CHF * CCY.CHF.macro.fx + BASKET_W.GOLD * GOLD.fx,
+      cpi: BASKET_W.USD * CCY.USD.macro.cpi + BASKET_W.CHF * CCY.CHF.macro.cpi + BASKET_W.GOLD * GOLD.cpi,
+    };
+    return CCY[id].macro;
+  }
+  function bmName() { return BENCH_LABEL[state.benchmark] || state.benchmark; }
+
+  // ---- accessibility for a global investor ----
+  const DM_GOVT = ["USD", "EUR", "GBP", "CHF", "JPY", "AUD", "CAD", "SGD"];
+  const RESIDENT_RE = /retail saving|savings bond|premium bond|income bond|direct saver|british savings|provident fund|\bppf\b|\bssb\b|singapore saving|frsb|floating rate saving|top-up bond|pillar 3a|kassenobligation|national bonds|poup|pagar|sovereign gold bond/i;
+  function accessOf(it) {
+    if (it.access) return it.access;
+    const n = (it.name + " " + it.type + " " + it.issuer).toLowerCase();
+    if (RESIDENT_RE.test(n)) return "Residents";
+    if (it.cat === "Bank Deposit") return "Residents";
+    if (["Government", "Cash & Money Market", "Inflation-Linked", "Municipal & Tax-Free"].includes(it.cat) && !DM_GOVT.includes(it.ccy)) return "Cross-border";
+    return "Global";
+  }
+  const ACCESS_META = {
+    "Global": { c: "acc-g", t: "Buyable worldwide via international brokers" },
+    "Cross-border": { c: "acc-x", t: "Open to foreigners but needs a specific broker/custodian or qualified-investor access" },
+    "Residents": { c: "acc-r", t: "Effectively residents-only (local account / citizenship / tax status required)" },
+  };
+  const ACCESS_ORDER = ["Global", "Cross-border", "Residents"];
 
   // ---- attach currency code + per-currency yield bounds (stable normalisation) ----
   const YBOUNDS = {};
@@ -54,12 +86,13 @@
     search: "",
     cats: new Set(),
     risks: new Set(),
+    access: new Set(),
     weights: LS.get("weights", Object.assign({}, FIA.weights)),
     sort: { key: "q", dir: "desc" },
     ccySort: { key: "overall", dir: "desc" },
   };
   if (!CCY[state.ccy]) state.ccy = "USD";
-  if (!CCY[state.benchmark]) state.benchmark = "CHF";
+  if (!CCY[state.benchmark] && state.benchmark !== "GOLD" && state.benchmark !== "BASKET") state.benchmark = "CHF";
 
   // ---- helpers ----
   const SYM = {
@@ -82,14 +115,14 @@
   const liqClass = (l) => (l === "High" ? "liq-h" : l === "Medium" ? "liq-m" : "liq-l");
 
   function deprecVsBenchmark(ccy) {
-    return CCY[ccy].macro.fx - CCY[state.benchmark].macro.fx; // currency X's annual depreciation vs the benchmark
+    return CCY[ccy].macro.fx - benchMacro(state.benchmark).fx; // currency X's annual depreciation vs the benchmark
   }
   function erosionBase(ccy) {
     const m = CCY[ccy].macro;
     if (state.erosion === "cpi") return m.cpi;
     const deprec = deprecVsBenchmark(ccy);
     if (state.erosion === "fx") return deprec;                  // currency move only
-    return deprec + CCY[state.benchmark].macro.cpi;             // "real": currency move + benchmark inflation
+    return deprec + benchMacro(state.benchmark).cpi;            // "real": currency move + benchmark inflation
   }
   function netReal(it) {
     if (state.erosion === "cpi" && typeof it.realY === "number") return it.realY;
@@ -136,6 +169,7 @@
     let rows = baseList().filter((it) => {
       if (state.cats.size && !state.cats.has(it.cat)) return false;
       if (state.risks.size && !state.risks.has(it.risk)) return false;
+      if (state.access.size && !state.access.has(accessOf(it))) return false;
       if (q) {
         const hay = (it.name + " " + it.issuer + " " + it.ticker + " " + it.type + " " + it.cat).toLowerCase();
         if (!hay.includes(q)) return false;
@@ -160,7 +194,7 @@
 
   // ===================================================================== CURRENCY LEAGUE
   function ccyLeague() {
-    const bmFx = CCY[state.benchmark].macro.fx;
+    const bmFx = benchMacro(state.benchmark).fx;
     const rows = Object.keys(CCY).map((code) => {
       const c = CCY[code], m = c.macro, insts = c.instruments;
       // "best safe rate" = highest-yielding genuinely safe, reasonably liquid instrument.
@@ -222,7 +256,7 @@
     // macro strip → methodology note
     $("macro").innerHTML = `<div class="macro-note" style="grid-column:1/-1">
       <strong>Best currency for fixed income.</strong> One row per currency. <em>Best safe rate</em> = the highest-yielding genuinely safe (risk 1), liquid instrument available.
-      <em>Real</em> nets off local inflation; <em>Hard</em> nets off the currency's move vs the <strong>benchmark</strong> (default CHF, the strongest by our currency score).
+      <em>Real</em> nets off local inflation; <em>Hard</em> nets off the currency's move vs the chosen <strong>benchmark</strong> (a currency, or hard money — gold / a USD·CHF·gold basket).
       <em>Currency score</em> blends sovereign credit (40%), low inflation (30%) and FX strength (30%). <em>Overall</em> = 50% hard-currency real rate + 50% currency score.
       Click a row to drill into that currency's instruments; click any header to re-rank.</div>`;
 
@@ -239,13 +273,13 @@
       card("", "Best currency overall", topOverall, `Score <b>${Math.round(topOverall.overall)}</b> · safe ${topOverall.safeY.toFixed(2)}% · hard-$ ${pct(topOverall.hard)}`),
       card("gold", "Highest safe rate", topRate, `<b>${topRate.safeY.toFixed(2)}%</b> · ${topRate.bestSafe.name}`),
       card("teal", "Best after inflation", topReal, `<b>${pct(topReal.real)}</b> real · ${topReal.safeY.toFixed(2)}% gross`),
-      card("blue", `Best hard (vs ${state.benchmark})`, topHard, `<b>${pct(topHard.hard)}</b> · ${topHard.safeY.toFixed(2)}% safe, after FX vs ${state.benchmark}`),
+      card("blue", `Best hard (vs ${bmName()})`, topHard, `<b>${pct(topHard.hard)}</b> · ${topHard.safeY.toFixed(2)}% safe, after FX vs ${bmName()}`),
     ].join("");
 
     // head
     $("thead").innerHTML = "<tr>" + LCOLS.map((c) => {
       const arrow = state.ccySort.key === c.key ? `<span class="arrow">${state.ccySort.dir === "asc" ? "▲" : "▼"}</span>` : "";
-      const lbl = c.key === "hard" ? "Hard (vs " + state.benchmark + ")" : c.label;
+      const lbl = c.key === "hard" ? "Hard (vs " + bmName() + ")" : c.label;
       return `<th class="${c.lft ? "lft" : ""}" data-lkey="${c.key}" ${c.sortable === false ? 'data-nosort="1"' : ""}>${lbl}${arrow}</th>`;
     }).join("") + "</tr>";
     $("thead").querySelectorAll("th").forEach((th) => {
@@ -322,6 +356,17 @@
       else { state.risks.has(r) ? state.risks.delete(r) : state.risks.add(r); }
       render(); renderChips();
     });
+
+    const ALABEL = { "Global": "🌍 Global", "Cross-border": "🛂 Cross-border", "Residents": "🏠 Residents" };
+    $("accessChips").innerHTML =
+      `<span class="chip${state.access.size === 0 ? " active" : ""}" data-acc="__all">All access</span>` +
+      ACCESS_ORDER.map((a) => `<span class="chip${state.access.has(a) ? " active" : ""}" data-acc="${a}">${ALABEL[a]}</span>`).join("");
+    $("accessChips").querySelectorAll(".chip").forEach((ch) => ch.onclick = () => {
+      const a = ch.dataset.acc;
+      if (a === "__all") state.access.clear();
+      else { state.access.has(a) ? state.access.delete(a) : state.access.add(a); }
+      render(); renderChips();
+    });
   }
 
   function renderMacro() {
@@ -359,7 +404,7 @@
     el.innerHTML = [
       card("gold", "Highest yield", topYield, (r) => `<b>${r.it.y.toFixed(2)}%</b> · risk ${r.it.risk}/5 · ${r.it.ccy}`),
       card("", "Best overall (risk-adjusted)", topQ, (r) => `Quality <b>${Math.round(r.q)}</b> · ${r.it.y.toFixed(2)}% · risk ${r.it.risk}/5`),
-      card("teal", `Best true return (${state.erosion === "cpi" ? "net of inflation" : state.erosion === "fx" ? "vs " + state.benchmark : "real, vs " + state.benchmark})`, topNet, (r) => `<b>${pct(r.net)}</b> · ${r.it.y.toFixed(2)}% gross`),
+      card("teal", `Best true return (${state.erosion === "cpi" ? "net of inflation" : state.erosion === "fx" ? "vs " + bmName() : "real, vs " + bmName()})`, topNet, (r) => `<b>${pct(r.net)}</b> · ${r.it.y.toFixed(2)}% gross`),
       card("blue", "Safest pick", safest, (r) => `risk ${r.it.risk}/5 · <b>${r.it.y.toFixed(2)}%</b> · ${r.it.rating}`),
     ].join("");
   }
@@ -380,10 +425,11 @@
   ];
 
   function renderHead() {
+    const bn = bmName();
     let baseLabel, netLabel;
     if (state.erosion === "cpi") { baseLabel = "Inflation"; netLabel = "Net real"; }
-    else if (state.erosion === "fx") { baseLabel = "FX vs " + state.benchmark; netLabel = "Net (" + state.benchmark + ")"; }
-    else { baseLabel = "Erosion vs " + state.benchmark; netLabel = "Real (" + state.benchmark + ")"; }
+    else if (state.erosion === "fx") { baseLabel = "FX vs " + bn; netLabel = "Net (" + bn + ")"; }
+    else { baseLabel = "Erosion vs " + bn; netLabel = "Real (" + bn + ")"; }
     $("thead").innerHTML = "<tr>" + COLS.map((c) => {
       const label = c.key === "base" ? baseLabel : c.key === "net" ? netLabel : c.label;
       const arrow = state.sort.key === c.key ? `<span class="arrow">${state.sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
@@ -421,13 +467,13 @@
         : (r.base === 0 ? "0%" : (r.base > 0 ? "−" + r.base.toFixed(2) + "%" : "+" + Math.abs(r.base).toFixed(2) + "%"));
       return `<tr data-i="${i}">
         <td class="lft rank">${i + 1}</td>
-        <td class="lft"><span class="inst-name">${it.name}</span>${tkr}${ccyTag}<div class="inst-sub">${it.issuer}</div></td>
+        <td class="lft"><span class="inst-name">${it.name}</span>${tkr}${ccyTag}<div class="inst-sub">${it.issuer} · <span class="acc ${ACCESS_META[accessOf(it)].c}" title="${ACCESS_META[accessOf(it)].t}">${accessOf(it)}</span></div></td>
         <td class="lft"><span class="cat-badge">${it.cat}</span></td>
         <td><span class="yield-val">${it.y.toFixed(2)}%</span>${il}${deltaChip(it)}</td>
         <td><span class="risk-pill"><span class="risk-txt">${it.rating}</span><span class="risk-dot r${it.risk}" title="risk ${it.risk}/5"></span></span></td>
         <td>${stars(it.rep)}</td>
         <td><div class="qbar"><span style="width:${Math.max(3, Math.min(100, r.q)).toFixed(0)}%"></span><b>${Math.round(r.q)}</b></div></td>
-        <td title="${state.erosion === "cpi" ? "local CPI inflation" : (state.erosion === "fx" ? "currency move vs " + state.benchmark : "currency move vs " + state.benchmark + " + " + state.benchmark + " inflation")}">${baseShown}</td>
+        <td title="${state.erosion === "cpi" ? "local CPI inflation" : (state.erosion === "fx" ? "currency move vs " + bmName() : "currency move vs " + bmName() + " + " + bmName() + " inflation")}">${baseShown}</td>
         <td class="${netCls}">${pct(r.net)}${(state.erosion === "cpi" && typeof it.realY === "number") ? '<span class="il-tag" title="protected real yield">real</span>' : ""}</td>
         <td><span class="income">${money(r.annual, it.ccy)}</span></td>
         <td><span class="income">${money(r.monthly, it.ccy)}</span><div class="income-sub">/mo</div></td>
@@ -447,7 +493,7 @@
     document.querySelectorAll("tr.open").forEach((o) => o.classList.remove("open"));
     tr.classList.add("open");
     const it = r.it;
-    const bm = state.benchmark, dep = deprecVsBenchmark(it.ccy), bmCpi = CCY[bm].macro.cpi;
+    const bm = bmName(), dep = deprecVsBenchmark(it.ccy), bmCpi = benchMacro(state.benchmark).cpi;
     const nb = `<b class="${r.net >= 0 ? "net-pos" : "net-neg"}">${pct(r.net)}</b>`;
     const depStr = (dep > 0 ? "− " : "+ ") + Math.abs(dep).toFixed(2) + "%";
     const netLine = state.erosion === "cpi"
@@ -472,6 +518,7 @@
         <span class="mk">Credit / cover</span><span>${it.rating}</span>
         <span class="mk">Risk</span><span>${it.risk}/5 · Reputation ${it.rep}/5 · Liquidity ${it.liq}</span>
         <span class="mk">Min. investment</span><span>${it.min}</span>
+        <span class="mk">Access</span><span>${accessOf(it)} — ${ACCESS_META[accessOf(it)].t}</span>
         <span class="mk">Tax</span><span>${it.tax}</span>
         <span class="mk">As of</span><span>${it.asOf}</span>
         ${snapNote}
@@ -558,7 +605,13 @@
       if (state.view === "ccy") render(); else { renderHead(); render(); }
     };
     const benchSel = $("benchmark");
-    benchSel.innerHTML = Object.keys(CCY).map((c) => `<option value="${c}">${CCY[c].flag} ${c}${c === "CHF" ? " — strongest" : ""}</option>`).join("");
+    benchSel.innerHTML =
+      '<optgroup label="Currencies">' +
+      Object.keys(CCY).map((c) => `<option value="${c}">${CCY[c].flag} ${c}${c === "CHF" ? " — strongest" : ""}</option>`).join("") +
+      '</optgroup><optgroup label="Hard money (inflation-free)">' +
+      '<option value="GOLD">🥇 Gold (XAU)</option>' +
+      '<option value="BASKET">⚖️ Hard-money basket</option>' +
+      '</optgroup>';
     benchSel.value = state.benchmark;
     benchSel.onchange = () => {
       state.benchmark = benchSel.value; LS.set("benchmark", state.benchmark);

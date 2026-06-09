@@ -7,10 +7,14 @@ income calculator.
 
 ## What it does
 
-- **~200 instruments** across 13 currencies: cash & T-bills, government & inflation-linked bonds, bank deposits,
-  covered/securitised bonds, **Islamic sukuk** (UAE sovereign & corporate), IG & HY credit, BDCs/private credit,
-  municipals & tax-free bonds, **preferreds & hybrids** (including **STRC** "Stretch" and **Alphabet's 6.25%
-  mandatory convertible**), REIT income and target-maturity funds.
+- **~220 instruments** across 13 currencies: cash & T-bills, government & inflation-linked bonds, bank deposits,
+  covered/securitised bonds, **Islamic sukuk**, IG & HY credit, **USD/EUR-denominated emerging-market bonds**
+  (EM yield *without* EM FX risk), BDCs/private credit, municipals & tax-free bonds, **preferreds & hybrids**
+  (incl. **STRC** "Stretch" and **Alphabet's 6.25% mandatory convertible**), REIT income and target-maturity funds.
+- **Benchmark of your choice** — measure "true return" against any of the 13 currencies *or* **inflation-free hard
+  money** (gold, or a USD·CHF·gold basket). Gold exposes how little actually preserves purchasing power.
+- **Accessibility flag** on every instrument — 🌍 Global / 🛂 Cross-border / 🏠 Residents — so a global investor
+  immediately sees what they can actually buy.
 - **Enter an amount to invest** → see annual & monthly income per instrument, recalculated live.
 - **Rank** by:
   - *Best overall* — a transparent, adjustable **Quality Score (0–100)** blending yield, safety, reputation & liquidity.

@@ -158,6 +158,10 @@ input[type=range] { accent-color: var(--emerald); width: 100%; }
 .inst-sub { color: var(--muted); font-size: 11.5px; }
 .tkr { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--gold); background: rgba(250,204,21,.1); border: 1px solid rgba(250,204,21,.25); padding: 0 6px; border-radius: 5px; margin-left: 6px; }
 .cat-badge { display: inline-block; font-size: 10.5px; color: var(--txt-dim); background: var(--panel2); border: 1px solid var(--line2); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.acc { font-size: 9.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; border: 1px solid; white-space: nowrap; }
+.acc-g { color: var(--emerald); border-color: rgba(52,211,153,.45); }
+.acc-x { color: var(--gold); border-color: rgba(250,204,21,.45); }
+.acc-r { color: var(--amber); border-color: rgba(251,191,36,.45); }
 
 .yield-val { font-weight: 700; font-size: 14.5px; color: var(--emerald); }
 .net-pos { color: var(--emerald); font-weight: 600; }
