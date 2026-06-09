@@ -69,6 +69,8 @@
     list.forEach((it) => { it.ccy = code; lo = Math.min(lo, it.y); hi = Math.max(hi, it.y); });
     YBOUNDS[code] = { lo, hi };
   });
+  const INSTR_BY_KEY = {};
+  Object.keys(CCY).forEach((code) => CCY[code].instruments.forEach((it) => { INSTR_BY_KEY[code + "|" + it.name] = it; }));
 
   // ---- most-recent yield snapshot (for month-over-month deltas) ----
   const SNAP = (FIA.snapshots && FIA.snapshots.length) ? FIA.snapshots[FIA.snapshots.length - 1] : null;
@@ -83,10 +85,12 @@
     rankBy: LS.get("rankBy", "best"),
     erosion: LS.get("erosion", "real"),
     benchmark: LS.get("benchmark", "CHF"),
+    fxBasis: LS.get("fxBasis", "historical"),
     search: "",
     cats: new Set(),
     risks: new Set(),
     access: new Set(),
+    portfolio: LS.get("portfolio", []),
     weights: LS.get("weights", Object.assign({}, FIA.weights)),
     sort: { key: "q", dir: "desc" },
     ccySort: { key: "overall", dir: "desc" },
@@ -114,8 +118,14 @@
   const liqScore = (l) => (l === "High" ? 1 : l === "Medium" ? 0.5 : 0.2);
   const liqClass = (l) => (l === "High" ? "liq-h" : l === "Medium" ? "liq-m" : "liq-l");
 
+  function benchPolicy(id) {
+    if (id === "GOLD") return 0;                        // gold lease rate ≈ 0
+    if (id === "BASKET") return BASKET_W.USD * CCY.USD.macro.policyRate + BASKET_W.CHF * CCY.CHF.macro.policyRate;
+    return CCY[id].macro.policyRate;
+  }
   function deprecVsBenchmark(ccy) {
-    return CCY[ccy].macro.fx - benchMacro(state.benchmark).fx; // currency X's annual depreciation vs the benchmark
+    if (state.fxBasis === "hedged") return CCY[ccy].macro.policyRate - benchPolicy(state.benchmark); // covered-interest-parity (forward-implied)
+    return CCY[ccy].macro.fx - benchMacro(state.benchmark).fx;                                        // long-run historical average
   }
   function erosionBase(ccy) {
     const m = CCY[ccy].macro;
@@ -207,7 +217,7 @@
       const top = insts.reduce((a, b) => (b.y > a.y ? b : a));
       const sov = SOVEREIGN[code] || { rating: "—", score: 3 };
       const real = bestSafe.y - m.cpi;                 // safe yield after local inflation
-      const hard = bestSafe.y - (m.fx - bmFx);         // safe yield after currency move vs the benchmark
+      const hard = bestSafe.y - deprecVsBenchmark(code); // safe yield after currency move vs the benchmark (respects FX basis)
       const inflN = clamp(1 - m.cpi / 10, 0, 1);
       const fxN = clamp(1 - (m.fx + 3) / 10, 0, 1);
       const ccyScore = 100 * (0.40 * (sov.score / 5) + 0.30 * inflN + 0.30 * fxN);
@@ -430,6 +440,7 @@
     if (state.erosion === "cpi") { baseLabel = "Inflation"; netLabel = "Net real"; }
     else if (state.erosion === "fx") { baseLabel = "FX vs " + bn; netLabel = "Net (" + bn + ")"; }
     else { baseLabel = "Erosion vs " + bn; netLabel = "Real (" + bn + ")"; }
+    if (state.erosion !== "cpi" && state.fxBasis === "hedged") netLabel += " ⚓";
     $("thead").innerHTML = "<tr>" + COLS.map((c) => {
       const label = c.key === "base" ? baseLabel : c.key === "net" ? netLabel : c.label;
       const arrow = state.sort.key === c.key ? `<span class="arrow">${state.sort.dir === "asc" ? "▲" : "▼"}</span>` : "";
@@ -461,13 +472,14 @@
       const tkr = it.ticker ? `<span class="tkr">${it.ticker}</span>` : "";
       const ccyTag = state.ccy === "ALL" ? `<span class="tkr" style="color:var(--teal);background:rgba(45,212,191,.1);border-color:rgba(45,212,191,.3)">${it.ccy}</span>` : "";
       const netCls = r.net >= 0 ? "net-pos" : "net-neg";
+      const pk = instKey(it); const inPort = state.portfolio.some((p) => p.key === pk);
       const il = it.il ? `<span class="il-tag" title="Inflation-linked: principal/coupon tracks CPI">CPI-linked</span>` : "";
       const baseShown = state.erosion === "cpi"
         ? r.base.toFixed(2) + "%"
         : (r.base === 0 ? "0%" : (r.base > 0 ? "−" + r.base.toFixed(2) + "%" : "+" + Math.abs(r.base).toFixed(2) + "%"));
       return `<tr data-i="${i}">
         <td class="lft rank">${i + 1}</td>
-        <td class="lft"><span class="inst-name">${it.name}</span>${tkr}${ccyTag}<div class="inst-sub">${it.issuer} · <span class="acc ${ACCESS_META[accessOf(it)].c}" title="${ACCESS_META[accessOf(it)].t}">${accessOf(it)}</span></div></td>
+        <td class="lft"><span class="inst-name">${it.name}</span>${tkr}${ccyTag}<div class="inst-sub">${it.issuer} · <span class="acc ${ACCESS_META[accessOf(it)].c}" title="${ACCESS_META[accessOf(it)].t}">${accessOf(it)}</span> · <button class="port-add${inPort ? " in" : ""}" data-key="${pk}">${inPort ? "✓ Port" : "+ Port"}</button></div></td>
         <td class="lft"><span class="cat-badge">${it.cat}</span></td>
         <td><span class="yield-val">${it.y.toFixed(2)}%</span>${il}${deltaChip(it)}</td>
         <td><span class="risk-pill"><span class="risk-txt">${it.rating}</span><span class="risk-dot r${it.risk}" title="risk ${it.risk}/5"></span></span></td>
@@ -482,6 +494,7 @@
     }).join("");
 
     tb.querySelectorAll("tr").forEach((tr) => tr.onclick = () => toggleDetail(tr, rows[+tr.dataset.i]));
+    tb.querySelectorAll(".port-add").forEach((b) => b.onclick = (e) => { e.stopPropagation(); togglePort(b.dataset.key); });
     $("rowCount").textContent = `${rows.length} instrument${rows.length === 1 ? "" : "s"}` +
       (state.ccy === "ALL" ? ` across ${Object.keys(CCY).length} currencies` : ` in ${state.ccy}`);
   }
@@ -578,6 +591,145 @@
     $("changelogInner").innerHTML = html;
   }
 
+  // ---- CSV export ----
+  function csvEscape(v) { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function buildCSV() {
+    let headers, rows, tag;
+    if (state.view === "ccy") {
+      tag = "currencies";
+      headers = ["Rank", "Currency", "Name", "Sovereign", "Policy%", "BestSafeRate%", "BestSafeInstrument", "TopYield%", "Inflation%", "FXvsUSD%/yr", "Real%", "Hard_vs_" + state.benchmark + "%", "CurrencyScore", "Overall"];
+      rows = leagueSorted().map((r, i) => [i + 1, r.code, r.c.name, r.sov.rating, r.m.policyRate, r.safeY, r.bestSafe.name, r.topY, r.m.cpi, r.m.fx, r.real.toFixed(2), r.hard.toFixed(2), Math.round(r.ccyScore), Math.round(r.overall)]);
+    } else {
+      tag = state.ccy === "ALL" ? "all" : state.ccy;
+      headers = ["Rank", "Instrument", "Issuer", "Currency", "Category", "Access", "Yield%", "Risk", "Rating", "Reputation", "Quality", "ErosionBase%", "TrueNet%", "AnnualIncome", "MonthlyIncome", "Liquidity", "AsOf", "Source"];
+      rows = visibleRows().map((r, i) => { const it = r.it; return [i + 1, it.name, it.issuer, it.ccy, it.cat, accessOf(it), it.y, it.risk, it.rating, it.rep, Math.round(r.q), r.base.toFixed(2), r.net.toFixed(2), Math.round(r.annual), Math.round(r.monthly), it.liq, it.asOf, it.src]; });
+    }
+    const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
+    return { filename: `fixed-income-${tag}-${(FIA.meta.asOf || "").replace(/\s/g, "")}.csv`, csv };
+  }
+  function exportCSV() {
+    const { filename, csv } = buildCSV();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  // ---- guided "find my best" wizard ----
+  function renderWizard() {
+    const sel = (id) => state.benchmark === id ? " selected" : "";
+    const benchOpts = '<optgroup label="Currencies">' +
+      Object.keys(CCY).map((c) => `<option value="${c}"${sel(c)}>${CCY[c].flag} ${c}${c === "CHF" ? " — strongest" : ""}</option>`).join("") +
+      '</optgroup><optgroup label="Hard money (inflation-free)">' +
+      `<option value="GOLD"${sel("GOLD")}>🥇 Gold</option><option value="BASKET"${sel("BASKET")}>⚖️ Hard-money basket</option></optgroup>`;
+    const ccyOpts = `<option value="ALL">🌐 All currencies</option>` + Object.keys(CCY).map((c) => `<option value="${c}"${state.ccy === c ? " selected" : ""}>${CCY[c].flag} ${c}</option>`).join("");
+    $("wizardInner").innerHTML = `<h3>✨ Find my best fixed income</h3>
+      <p class="muted">Answer a few questions; we'll filter the universe to what you can actually buy and rank it by <strong>true return</strong> in your chosen yardstick.</p>
+      <div class="wiz-grid">
+        <label class="ctrl"><span class="ctrl-label">Measure my return in</span><select id="wzBench">${benchOpts}</select></label>
+        <label class="ctrl"><span class="ctrl-label">Where can you buy?</span><select id="wzAccess">
+          <option value="Global">🌍 Anywhere (global brokers)</option>
+          <option value="Cross-border">🛂 + cross-border (specialist access)</option>
+          <option value="all">🏠 Include residents-only</option></select></label>
+        <label class="ctrl"><span class="ctrl-label">Risk appetite</span><select id="wzRisk">
+          <option value="2">Conservative (safest, 1–2)</option>
+          <option value="3" selected>Balanced (1–3)</option>
+          <option value="9">Adventurous (all)</option></select></label>
+        <label class="ctrl"><span class="ctrl-label">Currency focus</span><select id="wzCcy">${ccyOpts}</select></label>
+        <label class="ctrl"><span class="ctrl-label">Amount</span><span class="amount-wrap"><span class="amount-sym">${(SYM[state.ccy] || "$").trim() || "$"}</span><input type="text" id="wzAmount" value="${new Intl.NumberFormat("en-US").format(state.amount)}"></span></label>
+      </div>
+      <div class="panel-actions"><button class="ghost-btn primary" id="wzApply">Show my shortlist →</button><span class="muted">Sets the benchmark, filters, and ranks by true (after-erosion) return.</span></div>`;
+    $("wzApply").onclick = () => {
+      state.benchmark = $("wzBench").value; LS.set("benchmark", state.benchmark);
+      state.erosion = "real"; LS.set("erosion", "real");
+      state.access.clear();
+      const a = $("wzAccess").value;
+      if (a === "Global") state.access.add("Global");
+      else if (a === "Cross-border") { state.access.add("Global"); state.access.add("Cross-border"); }
+      state.risks.clear();
+      const rmax = +$("wzRisk").value;
+      if (rmax < 9) for (let r = 1; r <= rmax; r++) state.risks.add(r);
+      state.ccy = $("wzCcy").value; LS.set("ccy", state.ccy); state.cats.clear();
+      const n = parseFloat($("wzAmount").value.replace(/[^0-9.]/g, "")) || state.amount;
+      state.amount = n; LS.set("amount", n);
+      state.view = "inst"; LS.set("view", "inst");
+      state.rankBy = "net"; LS.set("rankBy", "net"); applyRankPreset();
+      $("wizardPanel").hidden = true;
+      $("rankBy").value = "net"; $("erosion").value = "real"; $("benchmark").value = state.benchmark;
+      $("amount").value = new Intl.NumberFormat("en-US").format(state.amount);
+      syncToggle(); renderAll();
+    };
+  }
+
+  // ---- portfolio blender ----
+  function updatePortCount() {
+    const b = $("portfolioBtn");
+    if (b) b.textContent = state.portfolio.length ? `🧺 Portfolio (${state.portfolio.length})` : "🧺 Portfolio";
+  }
+  function togglePort(key) {
+    const i = state.portfolio.findIndex((p) => p.key === key);
+    if (i >= 0) state.portfolio.splice(i, 1); else state.portfolio.push({ key, w: 0 });
+    const n = state.portfolio.length;
+    state.portfolio.forEach((p) => p.w = n ? Math.round(100 / n) : 0); // equalise on add/remove
+    LS.set("portfolio", state.portfolio);
+    render();
+    if (!$("portfolioPanel").hidden) renderPortfolio();
+  }
+  function renderPortfolio() {
+    const lines = state.portfolio.map((p) => INSTR_BY_KEY[p.key] ? { p, it: INSTR_BY_KEY[p.key] } : null).filter(Boolean);
+    if (!lines.length) {
+      $("portfolioInner").innerHTML = `<h3>🧺 Portfolio blender</h3><p class="muted">Click <strong>+ Port</strong> on any instrument row to build a blend. You'll see the weighted yield, true return (in your chosen benchmark) and income.</p>`;
+      return;
+    }
+    const sumW = lines.reduce((s, x) => s + (+x.p.w || 0), 0) || 1;
+    const erosName = state.erosion === "cpi" ? "after inflation" : state.erosion === "fx" ? "vs " + bmName() : "real, vs " + bmName();
+    let gY = 0, net = 0, risk = 0, q = 0;
+    lines.forEach((x) => { const w = (+x.p.w || 0) / sumW; gY += w * x.it.y; net += w * netReal(x.it); risk += w * x.it.risk; q += w * quality(x.it); });
+    const ccys = [...new Set(lines.map((x) => x.it.ccy))];
+    const single = ccys.length === 1 ? ccys[0] : null;
+    const rowsHtml = lines.map((x, idx) => {
+      const it = x.it, w = +x.p.w || 0, inc = state.amount * (w / sumW) * it.y / 100;
+      return `<tr><td class="lft">${it.name}<div class="inst-sub">${it.ccy} · ${it.cat}</div></td>
+        <td>${it.y.toFixed(2)}%</td>
+        <td><input class="port-w" data-i="${idx}" type="number" min="0" step="5" value="${w}">%</td>
+        <td class="${netReal(it) >= 0 ? "net-pos" : "net-neg"}">${pct(netReal(it))}</td>
+        <td>${money(inc, it.ccy)}/yr</td>
+        <td><button class="port-del" data-key="${x.p.key}" title="remove">✕</button></td></tr>`;
+    }).join("");
+    const totalIncome = single
+      ? `${money(state.amount * gY / 100, single)}/yr · ${money(state.amount * gY / 100 / 12, single)}/mo`
+      : `<span class="muted">mixed currencies — see per-line</span>`;
+    $("portfolioInner").innerHTML = `<h3>🧺 Portfolio blender <span class="muted" style="font-weight:400">· ${lines.length} holdings · ${money(state.amount, single || state.ccy)} notional</span></h3>
+      <table class="port-table"><thead><tr><th class="lft">Instrument</th><th>Yield</th><th>Weight</th><th>True net (${erosName})</th><th>Income</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table>
+      <div class="port-sum">
+        <div><div class="k">Blended yield</div><div class="v">${gY.toFixed(2)}%</div></div>
+        <div><div class="k">Blended true net</div><div class="v ${net >= 0 ? "net-pos" : "net-neg"}">${pct(net)}</div></div>
+        <div><div class="k">Weighted risk</div><div class="v">${risk.toFixed(1)}/5</div></div>
+        <div><div class="k">Quality</div><div class="v">${Math.round(q)}</div></div>
+        <div><div class="k">Total income</div><div class="v" style="font-size:15px">${totalIncome}</div></div>
+        <div><div class="k">Weights sum</div><div class="v ${Math.abs(sumW - 100) < 0.5 ? "" : "net-neg"}">${sumW.toFixed(0)}%</div></div>
+      </div>
+      <div class="panel-actions"><button class="ghost-btn" id="portEqual">Equalise</button><button class="ghost-btn" id="portClear">Clear all</button><button class="ghost-btn" id="portCsv">⬇ Export portfolio</button><span class="muted">${ccys.length} currenc${ccys.length === 1 ? "y" : "ies"} · metrics use normalised weights &amp; the current benchmark/FX basis.</span></div>`;
+    $("portfolioInner").querySelectorAll(".port-w").forEach((inp) => inp.onchange = () => { state.portfolio[+inp.dataset.i].w = +inp.value || 0; LS.set("portfolio", state.portfolio); renderPortfolio(); });
+    $("portfolioInner").querySelectorAll(".port-del").forEach((b) => b.onclick = () => togglePort(b.dataset.key));
+    $("portEqual").onclick = () => { const n = state.portfolio.length; state.portfolio.forEach((p) => p.w = n ? Math.round(100 / n) : 0); LS.set("portfolio", state.portfolio); renderPortfolio(); render(); };
+    $("portClear").onclick = () => { state.portfolio = []; LS.set("portfolio", []); renderPortfolio(); render(); };
+    $("portCsv").onclick = exportPortfolioCSV;
+  }
+  function exportPortfolioCSV() {
+    const lines = state.portfolio.map((p) => INSTR_BY_KEY[p.key] ? { it: INSTR_BY_KEY[p.key], w: +p.w || 0 } : null).filter(Boolean);
+    if (!lines.length) return;
+    const sumW = lines.reduce((s, x) => s + x.w, 0) || 1;
+    const headers = ["Instrument", "Currency", "Category", "Weight%", "Yield%", "TrueNet%", "Income/yr"];
+    const rows = lines.map((x) => [x.it.name, x.it.ccy, x.it.cat, x.w, x.it.y, netReal(x.it).toFixed(2), Math.round(state.amount * (x.w / sumW) * x.it.y / 100)]);
+    const csv = [headers, ...rows].map((r) => r.map(csvEscape).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "fixed-income-portfolio.csv"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
   // ---- amount input / controls ----
   function syncAmountSym() {
     $("amountSym").textContent = (state.view === "ccy" || state.ccy === "ALL") ? "⨎" : ((SYM[state.ccy] || "$").trim() || "$");
@@ -617,17 +769,26 @@
       state.benchmark = benchSel.value; LS.set("benchmark", state.benchmark);
       if (state.view === "ccy") render(); else { renderHead(); render(); }
     };
+    const fxSel = $("fxBasis");
+    fxSel.value = state.fxBasis;
+    fxSel.onchange = () => {
+      state.fxBasis = fxSel.value; LS.set("fxBasis", state.fxBasis);
+      if (state.view === "ccy") render(); else { renderHead(); render(); }
+    };
     $("search").oninput = () => { state.search = $("search").value; render(); };
 
     $("viewToggle").querySelectorAll("button").forEach((b) => b.onclick = () => {
       state.view = b.dataset.view; LS.set("view", state.view); syncToggle(); renderAll();
     });
 
-    const panels = { methodBtn: "methodPanel", aboutBtn: "aboutPanel", changelogBtn: "changelogPanel" };
+    const panels = { methodBtn: "methodPanel", aboutBtn: "aboutPanel", changelogBtn: "changelogPanel", findBtn: "wizardPanel", portfolioBtn: "portfolioPanel" };
     const closeAll = (except) => Object.values(panels).forEach((p) => { if (p !== except) $(p).hidden = true; });
     $("methodBtn").onclick = () => { const p = $("methodPanel"); p.hidden = !p.hidden; if (!p.hidden) { closeAll("methodPanel"); renderSliders(); } };
     $("aboutBtn").onclick = () => { const p = $("aboutPanel"); p.hidden = !p.hidden; if (!p.hidden) { closeAll("aboutPanel"); renderAbout(); } };
     $("changelogBtn").onclick = () => { const p = $("changelogPanel"); p.hidden = !p.hidden; if (!p.hidden) { closeAll("changelogPanel"); renderChangelog(); } };
+    $("findBtn").onclick = () => { const p = $("wizardPanel"); p.hidden = !p.hidden; if (!p.hidden) { closeAll("wizardPanel"); renderWizard(); } };
+    $("exportBtn").onclick = exportCSV;
+    $("portfolioBtn").onclick = () => { const p = $("portfolioPanel"); p.hidden = !p.hidden; if (!p.hidden) { closeAll("portfolioPanel"); renderPortfolio(); } };
     $("resetWeights").onclick = () => { state.weights = Object.assign({}, FIA.weights); LS.set("weights", state.weights); renderSliders(); render(); };
 
     $("disclaimerText").textContent = FIA.meta.disclaimer;
@@ -645,6 +806,7 @@
   // ---- master render ----
   function render() {
     syncAmountSym();
+    updatePortCount();
     if (state.view === "ccy") { renderLeague(); return; }
     const rows = visibleRows();
     renderHighlights(rows);

@@ -54,6 +54,24 @@ button { font-family: inherit; cursor: pointer; }
   padding: 8px 12px; border-radius: 9px; font-size: 12.5px; transition: .15s;
 }
 .ghost-btn:hover { color: var(--txt); border-color: var(--emerald); background: var(--panel2); }
+.ghost-btn.primary { background: linear-gradient(180deg, var(--emerald), var(--emerald-d)); color: #06231d; border-color: var(--emerald); font-weight: 700; }
+.ghost-btn.primary:hover { color: #06231d; filter: brightness(1.08); }
+.wiz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 14px; }
+
+/* ===== portfolio blender ===== */
+.port-add { font-size: 10px; font-weight: 700; color: var(--teal); background: none; border: 1px solid rgba(45,212,191,.35); border-radius: 4px; padding: 0 5px; cursor: pointer; }
+.port-add:hover { background: rgba(45,212,191,.12); }
+.port-add.in { color: #06231d; background: var(--teal); border-color: var(--teal); }
+.port-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+.port-table th, .port-table td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+.port-table th.lft, .port-table td.lft { text-align: left; }
+.port-table th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+.port-w { background: var(--panel); border: 1px solid var(--line2); color: var(--txt); border-radius: 6px; padding: 4px 6px; width: 62px; text-align: right; }
+.port-del { background: none; border: none; color: var(--red); cursor: pointer; font-size: 13px; }
+.port-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 14px; }
+.port-sum > div { background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 10px 12px; }
+.port-sum .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.port-sum .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ===== Disclaimer ===== */
 .disclaimer {
@@ -207,8 +225,9 @@ body.view-ccy .filter-row,
 body.view-ccy #ctrlRank,
 body.view-ccy #ctrlErosion,
 body.view-ccy #ctrlSearch { display: none; }
-/* benchmark selector only matters when FX is involved */
-body.erosion-cpi:not(.view-ccy) #ctrlBenchmark { display: none; }
+/* benchmark + FX-assumption selectors only matter when FX is involved */
+body.erosion-cpi:not(.view-ccy) #ctrlBenchmark,
+body.erosion-cpi:not(.view-ccy) #ctrlFxBasis { display: none; }
 
 /* ===== month-over-month delta chips ===== */
 .delta { font-size: 10.5px; font-weight: 700; padding: 0 4px; border-radius: 4px; margin-left: 5px; vertical-align: 1px; }
