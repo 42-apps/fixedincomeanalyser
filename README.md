@@ -15,6 +15,11 @@ income calculator.
   money** (gold, or a USD·CHF·gold basket). Gold exposes how little actually preserves purchasing power.
 - **Accessibility flag** on every instrument — 🌍 Global / 🛂 Cross-border / 🏠 Residents — so a global investor
   immediately sees what they can actually buy.
+- **Hedged vs unhedged** FX toggle — shows how a juicy local yield collapses toward the benchmark rate once you
+  hedge the currency (covered interest parity), so you don't chase mirages.
+- **✨ "Find my best" wizard** — pick your yardstick, where you can buy and your risk appetite → an instant ranked shortlist.
+- **🧺 Portfolio blender** — add instruments, set weights, and see the blended yield, true return, weighted risk and total income.
+- **CSV export** of any view (instruments, currency league, or portfolio).
 - **Enter an amount to invest** → see annual & monthly income per instrument, recalculated live.
 - **Rank** by:
   - *Best overall* — a transparent, adjustable **Quality Score (0–100)** blending yield, safety, reputation & liquidity.

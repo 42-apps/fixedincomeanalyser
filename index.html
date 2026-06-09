@@ -19,6 +19,9 @@
       </div>
     </div>
     <div class="brand-right">
+      <button class="ghost-btn primary" id="findBtn" title="Guided shortlist">✨ Find my best</button>
+      <button class="ghost-btn" id="exportBtn" title="Download the current view as CSV">⬇ CSV</button>
+      <button class="ghost-btn" id="portfolioBtn" title="Blend instruments into a portfolio">🧺 Portfolio</button>
       <button class="ghost-btn" id="changelogBtn" title="Data version history &amp; month-over-month changes">📈 Changelog</button>
       <button class="ghost-btn" id="methodBtn" title="How the scores work">⚙ Methodology &amp; weights</button>
       <button class="ghost-btn" id="aboutBtn" title="Sources &amp; disclaimer">ⓘ About</button>
@@ -74,6 +77,14 @@
         <select id="benchmark"></select>
       </label>
 
+      <label class="ctrl" id="ctrlFxBasis">
+        <span class="ctrl-label">FX assumption</span>
+        <select id="fxBasis">
+          <option value="historical">Historical FX (long-run avg)</option>
+          <option value="hedged">Hedged (rate parity)</option>
+        </select>
+      </label>
+
       <label class="ctrl search" id="ctrlSearch">
         <span class="ctrl-label">Search</span>
         <input type="text" id="search" placeholder="name, ticker, issuer…" />
@@ -114,6 +125,16 @@
   <!-- ===== Changelog ===== -->
   <section class="panel" id="changelogPanel" hidden>
     <div class="panel-inner" id="changelogInner"></div>
+  </section>
+
+  <!-- ===== Guided wizard ===== -->
+  <section class="panel" id="wizardPanel" hidden>
+    <div class="panel-inner" id="wizardInner"></div>
+  </section>
+
+  <!-- ===== Portfolio blender ===== -->
+  <section class="panel" id="portfolioPanel" hidden>
+    <div class="panel-inner" id="portfolioInner"></div>
   </section>
 
   <!-- ===== Macro strip ===== -->
